@@ -9,8 +9,7 @@ import tensorflow as tf
 from typeguard import typechecked
 from typing import Union, Optional
 
-from fire_ml.layers.rnn_encoder_decoder import RnnEncoder, RnnDecoder
-
+from fire_ml.layers.rnn_encoder_decoder import RnnDecoder, RnnDecoder
 
 class AttentionEncoderDecoder(Model):
     """Encoder-Decoder model with attention.
@@ -314,7 +313,6 @@ class AttentionEncoderDecoder(Model):
             return predictions
 
         attention_weights = attention_weights.stack()
-        print(attention_weights.shape)
         attention_weights = tf.transpose(attention_weights, [1, 0, 2])
         return predictions, attention_weights
 
