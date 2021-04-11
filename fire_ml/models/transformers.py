@@ -4,6 +4,7 @@ from __future__ import print_function
 
 from tensorflow.keras import Model, layers
 import tensorflow as tf
+from tensorflow.python.keras.layers.core import Activation
 
 from typeguard import typechecked
 from typing import Union, Optional
@@ -241,12 +242,11 @@ class ClassicTransformer(Model):
 
 
 class TransformerClassifier(Model):
-    """The original Transformer adapted to time series prediction.
+    """Self-Attention for time series classification.
 
     Args:
-        prediction_steps: the number of time steps to predict.
-        num_output_features: the number of features in each prediction step.
-        num_layers: the number of layers to use for the encoder and decoder.
+        num_classifications: the number of classifications to make.
+        num_layers: the number of layers to use for the encoder.
         d_model: the depth of the model.
         num_heads: the number of heads to break the model depth into. d_model must be
             divisible by num_heads.
@@ -254,12 +254,71 @@ class TransformerClassifier(Model):
             transformer layers.
         drop_rate: the the dropout rate to use between each step of the transformer
             layers.
-        first_prediciton_units: If using a FF network to predict the first step in the
-            output, this gives the number of hidden units to use.
-        idx_continue: the indices from the input to use in the first step of the
-            decoder. These need to be less than the number of output features
-            and will appear as the first indices in the decoder output. Make
-            sure that this matches up with the data.
+
+    Call arguments:
+        inputs: a Tensor representing a multivariate time series
+        training: whether the model is training or not.
+        return_attention_weights: sets whether or not to return the attention weights.
+
+    Input shapes:
+        inputs: (batch_size, num_time_steps, # features).
+
+    Output shape:
+        output: (batch_size, num_classifications).
+        attn_wts: (batch_size, num_layers, num_heads, num_time_steps, num_time_steps)
+
+    Returns:
+        output: classifications (0 or 1). Multiple classifications allows to classify
+            at multiple time horizons. For example, it could classify whether a plug
+            loss will happen in the next 5 mins, the next 10 mins, the next 15 mins, etc.
+        attn_w: The attention weights for each self-attention comparison.
     """
 
-    pass
+    @typechecked
+    def __init__(
+        self,
+        num_classifications: tf.Tensor,
+        num_layers: tf.Tensor,
+        d_model: tf.Tensor,
+        num_heads: tf.Tensor,
+        ff_units: tf.Tensor,
+        drop_rate: tf.Tensor = tf.constant(0.1),
+        activation: Union[str, Activation, None] = "sigmoid",
+        **kwargs,
+    ):
+        super(TransformerClassifier, self).__init__(**kwargs)
+        self._num_classifications = num_classifications
+        self._num_layers = num_layers
+        self._d_model = d_model
+        self._num_heads = num_heads
+        self._ff_units = ff_units
+        self._drop_rate = drop_rate
+
+        self._encoder = TransEncoder(
+            num_layers,
+            d_model,
+            num_heads,
+            ff_units,
+            drop_rate=drop_rate,
+            absolute_encoding=tf.constant(True),
+        )
+        self._flatten = layers.Flatten()
+        self._dense = layers.Dense(num_classifications, activation=activation)
+
+    def call(
+        self,
+        inputs: tf.Tensor,
+        training: Union[bool, tf.Tensor, None] = None,
+        return_attention_weights: bool = False,
+    ):
+        enc_output, enc_attn = self._encoder(
+            inputs,
+            training=training,
+        )
+        flat_encodings = self._flatten(enc_output)
+        output = self._dense(flat_encodings)
+
+        if return_attention_weights is False:
+            return output
+
+        return output, enc_attn
