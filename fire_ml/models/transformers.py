@@ -311,14 +311,15 @@ class TransformerClassifier(Model):
         training: Union[bool, tf.Tensor, None] = None,
         return_attention_weights: bool = False,
     ):
-        enc_output, enc_attn = self._encoder(
+        # add ability to visualize weights
+        enc_output, _ = self._encoder(
             inputs,
             training=training,
         )
         flat_encodings = self._flatten(enc_output)
         output = self._dense(flat_encodings)
+        num_classifications = self._num_classifications
+        if num_classifications == tf.constant(1):
+            output = tf.squeeze(output, axis=-1)
 
-        if return_attention_weights is False:
-            return output
-
-        return output, enc_attn
+        return output
