@@ -312,7 +312,7 @@ class TransformerClassifier(Model):
         return_attention_weights: bool = False,
     ):
         # add ability to visualize weights
-        enc_output, _ = self._encoder(
+        enc_output, attn_ws = self._encoder(
             inputs,
             training=training,
         )
@@ -321,5 +321,6 @@ class TransformerClassifier(Model):
         num_classifications = self._num_classifications
         if num_classifications == tf.constant(1):
             output = tf.squeeze(output, axis=-1)
-
-        return output
+        if not return_attention_weights:
+            return output
+        return output, attn_ws
